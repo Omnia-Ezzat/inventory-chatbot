@@ -33,7 +33,7 @@ class Neo4jAgent:
     def classify_intent(self, user_input: str) -> str:
         prompt = [
             SystemMessage(content="""You are an intent classification assistant for a Knowledge Graph. 
-Classify the user's input into EXACTLY ONE of the following categories: add, inquire, update, delete.
+Classify the user's input into EXACTLY ONE of the following categories: chitchat, add, inquire, update, delete.
 ONLY return the category name in lowercase without any punctuation or extra text.
 
 Examples:
@@ -41,6 +41,7 @@ Examples:
 - "who works at DataHub" -> inquire
 - "update Ahmed company to OpenAI" -> update
 - "delete Ahmed employment" -> delete
+- "hello", "how are you", "who are you" -> chitchat
 """)
         ] + self.chat_history[-6:] + [
             HumanMessage(content=user_input)
@@ -110,10 +111,43 @@ Query Results: {records}""")
         response = self.llm.invoke(prompt)
         return response.content.strip()
 
-    def process_request(self, user_input: str) -> str:
+    def _save_interaction(self, session_id: str, user_input: str, response: str):
+        self.chat_history.append(HumanMessage(content=user_input))
+        self.chat_history.append(AIMessage(content=response))
+        
+        if not self.driver:
+            return
+            
+        import datetime
+        now = datetime.datetime.now().isoformat()
+        
+        query = """
+        MERGE (s:Session {id: $session_id})
+        CREATE (m_user:Message {role: 'user', content: $user_input, timestamp: $timestamp})
+        CREATE (m_ai:Message {role: 'assistant', content: $response, timestamp: $timestamp})
+        CREATE (s)-[:HAS_MESSAGE]->(m_user)
+        CREATE (s)-[:HAS_MESSAGE]->(m_ai)
+        """
+        try:
+            with self.driver.session() as session:
+                session.run(query, session_id=session_id, user_input=user_input, response=response, timestamp=now)
+        except Exception as e:
+            print(f"Failed to log interaction to Neo4j: {e}")
+
+    def process_request(self, user_input: str, session_id: str = "default") -> str:
         intent = self.classify_intent(user_input)
         
-        if intent not in ['add', 'inquire', 'update', 'delete']:
+        if intent == 'chitchat':
+            prompt = [
+                SystemMessage(content="You are a friendly assistant. Greet the user or respond to casual chat naturally.")
+            ] + self.chat_history[-6:] + [
+                HumanMessage(content=user_input)
+            ]
+            final_response = self.llm.invoke(prompt).content.strip()
+            self._save_interaction(session_id, user_input, final_response)
+            return final_response
+            
+        if intent not in ['add', 'inquire', 'update', 'delete', 'chitchat']:
             # Maybe the LLM got confused, default to inquire
             intent = 'inquire'
             
@@ -122,12 +156,10 @@ Query Results: {records}""")
         records, error = self.execute_query(cypher)
         
         if error:
-            # Check if it's an expected operational empty result or an actual syntax error
-            pass
-            
-        final_response = self.generate_response(intent, user_input, records)
+            final_response = f"Database error occurred: {error}"
+        else:
+            final_response = self.generate_response(intent, user_input, records)
         
-        self.chat_history.append(HumanMessage(content=user_input))
-        self.chat_history.append(AIMessage(content=final_response))
+        self._save_interaction(session_id, user_input, final_response)
         
         return final_response

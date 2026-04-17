@@ -193,18 +193,13 @@ Return ONLY JSON:
 """
 
 EXECUTE_PROMPT = """Context: You are a helpful inventory assistant.
-
-Input:
-* User Question: {question}
-* Generated SQL: {sql}
-* Database Results: {results}
+You will be provided with the user question, the generated SQL, and the database results.
 
 Generate a clear natural language answer.
 
-Output format:
-Natural Language Answer:
-<Explain the result clearly>
-
-Present Query:
-<The SQL query used>
+Return ONLY JSON:
+{
+  "natural_language_answer": "<Explain the result clearly>",
+  "sql_query": "<The SQL query used>"
+}
 """

@@ -18,7 +18,7 @@ llm = ChatGroq(
     temperature=0
 )
 
-DB_PATH = "inventory.db"
+DB_PATH = os.path.join(os.path.dirname(__file__), "inventory.db")
 
 def execute_query(sql: str):
     """Executes a SQL query against the SQLite database."""
@@ -132,15 +132,35 @@ Database Results:
 
     response = llm.invoke(prompt)
 
+    content = response.content
     try:
-        data = json.loads(response.content)
+        if "```json" in content:
+            json_str = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            json_str = content.split("```")[1].strip()
+        else:
+            json_str = content.strip()
+        data = json.loads(json_str)
     except:
         data = {
-            "natural_language_answer": response.content,
+            "natural_language_answer": content,
             "sql_query": sql
         }
 
     new_message = {"role": "assistant", "content": data}
+    
+    # Save to SQLite ChatHistory
+    session_id = state.get("session_id", "default")
+    if session_id:
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO ChatHistory (SessionId, Role, Content) VALUES (?, ?, ?)", (session_id, 'user', user_question))
+            cur.execute("INSERT INTO ChatHistory (SessionId, Role, Content) VALUES (?, ?, ?)", (session_id, 'assistant', data.get("natural_language_answer", str(data))))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Failed to log to SQLite: {e}")
 
     return {"messages": messages + [new_message]}
     

@@ -1,10 +1,6 @@
-fastapi
-uvicorn
 langgraph
 langchain
-langchain-openai
 langchain-groq
-pydantic
-sqlalchemy
 python-dotenv
-neo4j
+pydantic
+typing-extensions

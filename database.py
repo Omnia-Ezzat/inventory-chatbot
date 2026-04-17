@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-DB_PATH = "inventory.db"
+DB_PATH = os.path.join(os.path.dirname(__file__), "inventory.db")
 
 def init_db():
     if os.path.exists(DB_PATH):
@@ -12,6 +12,15 @@ def init_db():
 
     # DDL
     schemas = [
+        """
+        CREATE TABLE IF NOT EXISTS ChatHistory (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            SessionId TEXT NOT NULL,
+            Role TEXT NOT NULL,
+            Content TEXT NOT NULL,
+            Timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
         """
         CREATE TABLE Customers (
             CustomerId INTEGER PRIMARY KEY AUTOINCREMENT,

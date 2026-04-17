@@ -10,6 +10,7 @@ class AgentState(TypedDict):
     query_results: List[Dict[str, Any]]
     error_message: str
     retry_count: int
+    session_id: str
 
 # --- API Models ---
 
